@@ -25,6 +25,7 @@ class NightMasterApplication : Application() {
         ModelCatalogRepository(
             context = applicationContext,
             dao = database.dao(),
+            settingsRepository = settingsRepository,
         )
     }
 
