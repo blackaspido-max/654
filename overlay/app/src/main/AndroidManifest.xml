@@ -16,6 +16,11 @@
             android:screenOrientation="portrait" />
 
         <activity
+            android:name=".ModelChatActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <activity
             android:name=".ShellActivity"
             android:exported="true"
             android:screenOrientation="portrait">
