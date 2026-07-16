@@ -96,7 +96,7 @@ jobs:
           Package: ru.aspid.nightmaster
           Application commit: $app_commit
           llama.cpp commit: $llama_commit
-          ABI: arm64-v8a
+          Inference ABI: arm64-v8a
           Build type: debug
           APK SHA-256: $apk_sha256
           EOF
@@ -141,12 +141,22 @@ jobs:
             exit 1
           fi
 
-          grep -Eq '^lib/arm64-v8a/' <<<"$files" || {
-            echo "ARM64 native libraries were not found" >&2
-            exit 1
-          }
-          if grep -Eq '^lib/(x86|x86_64|armeabi-v7a)/' <<<"$files"; then
-            echo "Unexpected non-ARM64 native library found" >&2
+          for library in \
+            libai-chat.so \
+            libggml-base.so \
+            libggml-cpu.so \
+            libggml.so \
+            libllama-common.so \
+            libllama.so \
+            libomp.so; do
+            grep -Fxq "lib/arm64-v8a/$library" <<<"$files" || {
+              echo "Missing ARM64 inference library: $library" >&2
+              exit 1
+            }
+          done
+
+          if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/(libai-chat|libggml|libllama|libomp)' <<<"$files"; then
+            echo "Inference engine must not contain non-ARM64 libraries" >&2
             exit 1
           fi
 
