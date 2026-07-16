@@ -23,12 +23,4 @@ class NightMasterApplication : Application() {
     val inferenceController: InferenceController by lazy {
         LlamaInferenceController(applicationContext)
     }
-
-    override fun onTerminate() {
-        if (this::class.java.desiredAssertionStatus()) {
-            inferenceController.close()
-            database.close()
-        }
-        super.onTerminate()
-    }
 }
