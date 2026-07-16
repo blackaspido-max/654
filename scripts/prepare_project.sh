@@ -12,7 +12,7 @@ git clone --depth 1 https://github.com/ggml-org/llama.cpp.git "$UPSTREAM"
 rm -rf "$OUT/app"
 cp -R "$ROOT/overlay/app" "$OUT/app"
 
-# Первый прототип собирается только для обычных ARM64-телефонов.
+# Прототип собирается только для обычных ARM64-телефонов.
 sed -i 's/listOf("arm64-v8a", "x86_64")/listOf("arm64-v8a")/' "$OUT/lib/build.gradle.kts"
 sed -i 's/-DGGML_BACKEND_DL=ON/-DGGML_BACKEND_DL=OFF/' "$OUT/lib/build.gradle.kts"
 sed -i 's/-DGGML_CPU_ALL_VARIANTS=ON/-DGGML_CPU_ALL_VARIANTS=OFF/' "$OUT/lib/build.gradle.kts"
@@ -26,9 +26,11 @@ sed -i 's/const bool has_chat_template = common_chat_templates_was_explicit(g_ch
 # Исправляем двойной учёт длины пользовательского сообщения в лимите генерации.
 sed -i 's/stop_generation_position = current_position + user_prompt_size + n_predict;/stop_generation_position = current_position + n_predict;/' "$AI_CHAT"
 
-# Более лёгкий контекст для телефона и более живые настройки генерации.
+# Контекст 4096 экономит память на телефоне.
 sed -i 's/constexpr int   DEFAULT_CONTEXT_SIZE    = 8192;/constexpr int   DEFAULT_CONTEXT_SIZE    = 4096;/' "$AI_CHAT"
-sed -i 's/constexpr float DEFAULT_SAMPLER_TEMP    = 0.3f;/constexpr float DEFAULT_SAMPLER_TEMP    = 0.75f;/' "$AI_CHAT"
+
+# Официальные настройки Qwen3 для non-thinking режима плюс мягкая защита от повторов.
+sed -i 's/constexpr float DEFAULT_SAMPLER_TEMP    = 0.3f;/constexpr float DEFAULT_SAMPLER_TEMP    = 0.70f;/' "$AI_CHAT"
 python3 - "$AI_CHAT" <<'PY'
 from pathlib import Path
 import sys
@@ -42,10 +44,12 @@ old = """static common_sampler *new_sampler(float temp) {
 new = """static common_sampler *new_sampler(float temp) {
     common_params_sampling sparams;
     sparams.temp = temp;
-    sparams.top_p = 0.90f;
-    sparams.min_p = 0.05f;
+    sparams.top_k = 20;
+    sparams.top_p = 0.80f;
+    sparams.min_p = 0.00f;
     sparams.penalty_last_n = 128;
-    sparams.penalty_repeat = 1.12f;
+    sparams.penalty_repeat = 1.08f;
+    sparams.penalty_present = 0.15f;
     return common_sampler_init(g_model, sparams);
 }"""
 if old not in s:
@@ -54,4 +58,4 @@ p.write_text(s.replace(old, new), encoding="utf-8")
 PY
 
 chmod +x "$OUT/gradlew"
-echo "Prepared ARM64 Android project with Qwen chat template and mobile sampler settings"
+echo "Prepared ARM64 Android project for Qwen3 non-thinking roleplay test"
