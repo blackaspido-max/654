@@ -122,6 +122,8 @@ jobs:
           exec > >(tee "$GITHUB_WORKSPACE/apk-validation.log") 2>&1
 
           apk="dist/NightMaster-foundation-debug.apk"
+          committed_schema="overlay/app/schemas/ru.aspid.nightmaster.data.database.NightMasterDatabase/1.json"
+          generated_schema="dist/room-schemas/ru.aspid.nightmaster.data.database.NightMasterDatabase/1.json"
           package_name="$(apkanalyzer manifest application-id "$apk")"
           version_name="$(apkanalyzer manifest version-name "$apk")"
           version_code="$(apkanalyzer manifest version-code "$apk")"
@@ -193,8 +195,17 @@ jobs:
             exit 1
           }
 
-          test -f dist/room-schemas/ru.aspid.nightmaster.data.database.NightMasterDatabase/1.json || {
+          test -f "$generated_schema" || {
             echo "Room schema v1 is missing from artifact" >&2
+            exit 1
+          }
+          test -f "$committed_schema" || {
+            echo "Committed Room schema v1 is missing" >&2
+            exit 1
+          }
+          cmp --silent "$committed_schema" "$generated_schema" || {
+            echo "Committed Room schema differs from generated schema" >&2
+            diff -u "$committed_schema" "$generated_schema" || true
             exit 1
           }
 
