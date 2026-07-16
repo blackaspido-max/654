@@ -16,8 +16,6 @@ import com.arm.aichat.AiChat
 import com.arm.aichat.InferenceEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -76,7 +74,7 @@ class MainActivity : AppCompatActivity() {
                     action.isEnabled = true
                 }
             } catch (e: Exception) {
-                fail("Не удалось запустить локальный движок", e)
+                failLoad("Не удалось запустить локальный движок", e)
             }
         }
     }
@@ -90,12 +88,14 @@ class MainActivity : AppCompatActivity() {
                 val dir = File(filesDir, "models").apply { mkdirs() }
                 val target = File(dir, name.replace(Regex("[^a-zA-Z0-9._-]"), "_"))
                 contentResolver.openInputStream(uri)?.use { source ->
-                    FileOutputStream(target).use(source::copyTo)
+                    FileOutputStream(target).use { destination ->
+                        source.copyTo(destination)
+                    }
                 } ?: error("Не удалось открыть выбранный файл")
                 prefs.edit().putString("model_path", target.absolutePath).apply()
                 loadModel(target)
             } catch (e: Exception) {
-                fail("Не удалось загрузить модель", e)
+                failLoad("Не удалось загрузить модель", e)
             }
         }
     }
@@ -125,17 +125,8 @@ class MainActivity : AppCompatActivity() {
 
         val buffer = StringBuilder()
         generation = lifecycleScope.launch(Dispatchers.Default) {
-            engine.sendUserPrompt(text, predictLength = 512)
-                .catch { fail("Ошибка генерации", it as? Exception ?: Exception(it)) }
-                .onCompletion {
-                    ui {
-                        status.text = getString(R.string.status_ready)
-                        action.isEnabled = true
-                        input.isEnabled = true
-                        input.requestFocus()
-                    }
-                }
-                .collect { token ->
+            try {
+                engine.sendUserPrompt(text, predictLength = 512).collect { token ->
                     buffer.append(token)
                     ui {
                         val i = messages.lastIndex
@@ -144,6 +135,16 @@ class MainActivity : AppCompatActivity() {
                         list.scrollToPosition(i)
                     }
                 }
+                uiReady()
+            } catch (e: Exception) {
+                ui {
+                    status.text = "Ошибка генерации: ${e.message ?: e.javaClass.simpleName}"
+                    action.isEnabled = true
+                    input.isEnabled = true
+                    input.requestFocus()
+                    toast("Ошибка генерации")
+                }
+            }
         }
     }
 
@@ -167,7 +168,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun fail(prefix: String, error: Exception) {
+    private suspend fun uiReady() = ui {
+        status.text = getString(R.string.status_ready)
+        action.isEnabled = true
+        input.isEnabled = true
+        input.requestFocus()
+    }
+
+    private suspend fun failLoad(prefix: String, error: Exception) {
         ui {
             modelReady = false
             status.text = "$prefix: ${error.message ?: error.javaClass.simpleName}"
