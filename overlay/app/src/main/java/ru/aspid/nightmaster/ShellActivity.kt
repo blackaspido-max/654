@@ -21,6 +21,7 @@ import androidx.compose.material.Button
 import androidx.compose.material.Card
 import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedButton
 import androidx.compose.material.Scaffold
 import androidx.compose.material.Switch
 import androidx.compose.material.Text
@@ -68,6 +69,9 @@ class ShellActivity : ComponentActivity() {
                     modelCatalogRepository = app.modelCatalogRepository,
                     settingsRepository = app.settingsRepository,
                     onOpenChat = {
+                        startActivity(Intent(this, ModelChatActivity::class.java))
+                    },
+                    onOpenLegacyChat = {
                         startActivity(Intent(this, MainActivity::class.java))
                     },
                 )
@@ -93,6 +97,7 @@ private fun NightMasterShell(
     modelCatalogRepository: ModelCatalogRepository,
     settingsRepository: SettingsRepository,
     onOpenChat: () -> Unit,
+    onOpenLegacyChat: () -> Unit,
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -142,6 +147,7 @@ private fun NightMasterShell(
                     dao = dao,
                     modelCatalogRepository = modelCatalogRepository,
                     onOpenChat = onOpenChat,
+                    onOpenLegacyChat = onOpenLegacyChat,
                     onOpenModels = { navController.navigate(ShellDestination.Models.route) },
                 )
             }
@@ -166,6 +172,7 @@ private fun HomeScreen(
     dao: NightMasterDao,
     modelCatalogRepository: ModelCatalogRepository,
     onOpenChat: () -> Unit,
+    onOpenLegacyChat: () -> Unit,
     onOpenModels: () -> Unit,
 ) {
     val chatCount by dao.observeChatCount().collectAsStateWithLifecycle(initialValue = 0)
@@ -218,7 +225,15 @@ private fun HomeScreen(
                 onClick = if (selectedModel == null) onOpenModels else onOpenChat,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(if (selectedModel == null) "Добавить модель" else "Открыть чат")
+                Text(if (selectedModel == null) "Добавить модель" else "Открыть чат 0.7")
+            }
+        }
+        item {
+            OutlinedButton(
+                onClick = onOpenLegacyChat,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Резервный чат v0.5")
             }
         }
         item {
