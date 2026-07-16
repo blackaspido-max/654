@@ -105,31 +105,63 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          apk="dist/NightMaster-prototype-debug.apk"
+          exec > >(tee "$GITHUB_WORKSPACE/apk-validation.log") 2>&1
 
+          apk="dist/NightMaster-prototype-debug.apk"
           package_name="$(apkanalyzer manifest application-id "$apk")"
           version_name="$(apkanalyzer manifest version-name "$apk")"
           version_code="$(apkanalyzer manifest version-code "$apk")"
           permissions="$(apkanalyzer manifest permissions "$apk")"
-          files="$(apkanalyzer files list "$apk")"
+          files="$(unzip -Z1 "$apk")"
+          actual_llama_commit="$(git -C build/llama.cpp rev-parse HEAD)"
 
-          [[ "$package_name" == "ru.aspid.nightmaster" ]]
-          [[ "$version_name" == "0.5-prototype" ]]
-          [[ "$version_code" == "5" ]]
+          printf 'Package: %s\n' "$package_name"
+          printf 'Version name: %s\n' "$version_name"
+          printf 'Version code: %s\n' "$version_code"
+          printf 'llama.cpp commit: %s\n' "$actual_llama_commit"
+          printf 'Native libraries:\n'
+          grep -E '^lib/' <<<"$files" || true
+          printf 'Permissions:\n%s\n' "$permissions"
+
+          [[ "$package_name" == "ru.aspid.nightmaster" ]] || {
+            echo "Unexpected package name" >&2
+            exit 1
+          }
+          [[ "$version_name" == "0.5-prototype" ]] || {
+            echo "Unexpected version name" >&2
+            exit 1
+          }
+          [[ "$version_code" == "5" ]] || {
+            echo "Unexpected version code" >&2
+            exit 1
+          }
 
           if grep -Fq "android.permission.INTERNET" <<<"$permissions"; then
             echo "INTERNET permission must not be present" >&2
             exit 1
           fi
 
-          grep -Eq '^/?lib/arm64-v8a/' <<<"$files"
-          if grep -Eq '^/?lib/(x86|x86_64|armeabi-v7a)/' <<<"$files"; then
+          grep -Eq '^lib/arm64-v8a/' <<<"$files" || {
+            echo "ARM64 native libraries were not found" >&2
+            exit 1
+          }
+          if grep -Eq '^lib/(x86|x86_64|armeabi-v7a)/' <<<"$files"; then
             echo "Unexpected non-ARM64 native library found" >&2
             exit 1
           fi
 
-          actual_llama_commit="$(git -C build/llama.cpp rev-parse HEAD)"
-          [[ "$actual_llama_commit" == "$LLAMA_CPP_COMMIT" ]]
+          [[ "$actual_llama_commit" == "$LLAMA_CPP_COMMIT" ]] || {
+            echo "Unexpected llama.cpp commit" >&2
+            exit 1
+          }
+
+      - name: Upload APK validation log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NightMaster-apk-validation-log
+          path: apk-validation.log
+          if-no-files-found: warn
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
