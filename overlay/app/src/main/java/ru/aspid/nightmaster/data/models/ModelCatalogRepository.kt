@@ -16,13 +16,16 @@ import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import ru.aspid.nightmaster.data.database.ModelEntity
 import ru.aspid.nightmaster.data.database.NightMasterDao
+import ru.aspid.nightmaster.data.preferences.SettingsRepository
 
 class ModelCatalogRepository(
     context: Context,
     private val dao: NightMasterDao,
+    private val settingsRepository: SettingsRepository,
 ) {
     private val appContext = context.applicationContext
     private val resolver: ContentResolver = appContext.contentResolver
@@ -80,7 +83,7 @@ class ModelCatalogRepository(
     }
 
     suspend fun getSelectedModel(): ModelEntity? = withContext(Dispatchers.IO) {
-        dao.getSelectedModel()
+        if (settingsRepository.autoLoadSelectedModel.first()) dao.getSelectedModel() else null
     }
 
     suspend fun migrateLegacyModels(): Int = withContext(Dispatchers.IO) {
