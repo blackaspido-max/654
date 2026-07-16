@@ -38,8 +38,23 @@ jobs:
         run: bash scripts/prepare_project.sh
 
       - name: Build debug APK
+        id: gradle_build
         working-directory: build/NightMaster
-        run: ./gradlew :app:assembleDebug --stacktrace
+        shell: bash
+        run: |
+          set +e
+          ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee ../../gradle-build.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit "$code"
+
+      - name: Upload Gradle log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NightMaster-gradle-log
+          path: gradle-build.log
+          if-no-files-found: error
 
       - name: Collect APK
         run: |
