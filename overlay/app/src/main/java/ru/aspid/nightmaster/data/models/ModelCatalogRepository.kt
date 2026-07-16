@@ -39,13 +39,13 @@ class ModelCatalogRepository(
             "Нужно выбрать GGUF через системный проводник Android"
         }
 
-        persistReadPermission(uri)
-        verifySeekable(uri)
-
         val metadata = queryMetadata(uri)
         require(metadata.displayName.endsWith(".gguf", ignoreCase = true)) {
             "Выбранный файл не похож на GGUF-модель"
         }
+
+        verifySeekable(uri)
+        persistReadPermission(uri)
 
         val model = ModelEntity(
             id = stableId("uri:${uri}"),
@@ -71,6 +71,10 @@ class ModelCatalogRepository(
 
     suspend fun removeModel(model: ModelEntity) = withContext(Dispatchers.IO) {
         dao.deleteModel(model.id)
+        if (model.isSelected) {
+            dao.getNewestModel()?.let { fallback -> dao.selectModel(fallback.id) }
+        }
+
         model.documentUri?.let { value ->
             val uri = Uri.parse(value)
             runCatching {
@@ -175,7 +179,7 @@ class ModelCatalogRepository(
     private fun verifySeekable(uri: Uri) {
         val descriptor = resolver.openFileDescriptor(uri, "r")
             ?: error("Android не открыл файл модели")
-        descriptor.use(::verifySeekable)
+        descriptor.use { opened -> verifySeekable(opened) }
     }
 
     private fun verifySeekable(descriptor: ParcelFileDescriptor) {
@@ -245,11 +249,11 @@ object ModelFilenameMetadata {
     fun family(filename: String): String? {
         val normalized = filename.lowercase(Locale.ROOT)
         return when {
+            "deepseek" in normalized -> "DeepSeek"
             "qwen" in normalized -> "Qwen"
             "llama" in normalized -> "Llama"
             "mistral" in normalized || "mixtral" in normalized -> "Mistral"
             "gemma" in normalized -> "Gemma"
-            "deepseek" in normalized -> "DeepSeek"
             "phi" in normalized -> "Phi"
             else -> null
         }
