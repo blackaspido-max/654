@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background">#0F0C0E</color>
+    <color name="panel">#171216</color>
+    <color name="input">#211A20</color>
+    <color name="bubble_master">#1D171C</color>
+    <color name="border">#3A2934</color>
+    <color name="accent">#9E2347</color>
+    <color name="text_primary">#F5EDF1</color>
+    <color name="text_secondary">#B8A5AE</color>
+    <color name="white">#FFFFFF</color>
+</resources>
