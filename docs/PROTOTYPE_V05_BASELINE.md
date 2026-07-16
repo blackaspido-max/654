@@ -13,9 +13,12 @@ architecture is replaced.
 - Version name: `0.5-prototype`
 - Minimum Android version: API 33
 - Target Android version: API 36
-- Native ABI: `arm64-v8a`
+- Native inference ABI: `arm64-v8a`
 - Build type: debug prototype
 - Internet permission: absent
+
+The APK may contain transitive AndroidX native helper libraries for additional
+ABIs. The `llama.cpp` inference engine itself is built only for `arm64-v8a`.
 
 ## Native engine baseline
 
