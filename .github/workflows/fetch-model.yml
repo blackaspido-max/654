@@ -1,0 +1,38 @@
+name: Fetch Night Master Model
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "MODEL_TRIGGER.md"
+      - ".github/workflows/fetch-model.yml"
+
+jobs:
+  fetch-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Download official Qwen GGUF
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p model
+          curl -L --fail --retry 5 --retry-delay 5 \
+            --output model/qwen2.5-0.5b-instruct-q4_0.gguf \
+            "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf?download=true"
+
+      - name: Verify model SHA256
+        shell: bash
+        run: |
+          echo "7671c0c304e6ce5a7fc577bcb12aba01e2c155cc2efd29b2213c95b18edaf6ed  model/qwen2.5-0.5b-instruct-q4_0.gguf" | sha256sum -c -
+          sha256sum model/qwen2.5-0.5b-instruct-q4_0.gguf > model/SHA256.txt
+
+      - name: Upload model
+        uses: actions/upload-artifact@v4
+        with:
+          name: NightMaster-Qwen-model
+          path: model/
+          compression-level: 0
+          if-no-files-found: error
