@@ -24,8 +24,9 @@ fi
 
 # The prototype engine modifications are kept as one reviewable patch. The
 # explicit check makes upstream incompatibilities fail before Gradle starts.
-git -C "$UPSTREAM" apply --check "$PATCH_FILE"
-git -C "$UPSTREAM" apply "$PATCH_FILE"
+echo "Checking NightMaster engine patch against llama.cpp $actual_commit"
+git -C "$UPSTREAM" apply --check --verbose --recount "$PATCH_FILE"
+git -C "$UPSTREAM" apply --verbose --recount "$PATCH_FILE"
 
 rm -rf "$OUT/app"
 cp -R "$ROOT/overlay/app" "$OUT/app"
