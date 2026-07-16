@@ -123,14 +123,16 @@ class MainActivity : AppCompatActivity() {
         addMessage("…", false)
         uiState(getString(R.string.status_generating), false)
 
-        val buffer = StringBuilder()
+        val rawBuffer = StringBuilder()
         generation = lifecycleScope.launch(Dispatchers.Default) {
             try {
-                engine.sendUserPrompt(text, predictLength = 512).collect { token ->
-                    buffer.append(token)
+                // Qwen3 поддерживает мягкий переключатель /no_think.
+                engine.sendUserPrompt("$text\n/no_think", predictLength = 512).collect { token ->
+                    rawBuffer.append(token)
+                    val visible = visibleAssistantText(rawBuffer.toString())
                     ui {
                         val i = messages.lastIndex
-                        messages[i] = messages[i].copy(content = buffer.toString())
+                        messages[i] = messages[i].copy(content = visible)
                         adapter.notifyItemChanged(i)
                         list.scrollToPosition(i)
                     }
@@ -146,6 +148,18 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun visibleAssistantText(raw: String): String {
+        val trimmed = raw.trimStart()
+        val endTag = "</think>"
+        val visible = when {
+            trimmed.startsWith("<think>") && trimmed.contains(endTag) ->
+                trimmed.substringAfterLast(endTag)
+            trimmed.startsWith("<think>") -> ""
+            else -> raw.replace(Regex("(?s)<think>.*?</think>"), "")
+        }
+        return visible.trimStart().ifBlank { "…" }
     }
 
     private fun addMessage(text: String, user: Boolean) {
