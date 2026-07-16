@@ -7,8 +7,14 @@
     <string name="status_loading_model">Загружаю локального мастера…</string>
     <string name="status_generating">Мастер пишет…</string>
     <string name="status_ready">Локальный мастер готов · интернет не используется</string>
+    <string name="status_benchmark_warmup">Прогреваю модель…</string>
+    <string name="status_benchmark_native">Делаю два основных замера…</string>
+    <string name="status_benchmark_text">Проверяю скорость реального текста…</string>
+    <string name="status_benchmark_restore">Возвращаю чистый чат…</string>
     <string name="choose_model">Модель</string>
     <string name="send">Отправить</string>
+    <string name="benchmark">Тест скорости</string>
+    <string name="benchmark_title">Производительность модели</string>
     <string name="input_hint">Опиши сцену или действие…</string>
     <string name="initial_message">Я — Ночной мастер. Выбери файл локальной модели, затем опиши сеттинг, персонажа и начальную сцену.</string>
 </resources>
