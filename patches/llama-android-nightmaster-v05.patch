@@ -36,7 +36,7 @@ diff --git a/examples/llama.android/lib/src/main/cpp/CMakeLists.txt b/examples/l
 diff --git a/examples/llama.android/lib/src/main/cpp/ai_chat.cpp b/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
 --- a/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
 +++ b/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
-@@ -30,10 +30,10 @@ constexpr int   N_THREADS_MIN           = 2;
+@@ -30,11 +30,11 @@ constexpr int   N_THREADS_MIN           = 2;
  constexpr int   N_THREADS_MAX           = 4;
  constexpr int   N_THREADS_HEADROOM      = 2;
  
@@ -80,7 +80,7 @@ diff --git a/examples/llama.android/lib/src/main/cpp/ai_chat.cpp b/examples/llam
      if (has_chat_template) {
          formatted_user_prompt = chat_add_and_format(ROLE_USER, user_prompt);
      }
-@@ -447,7 +453,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
+@@ -447,6 +453,6 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
  
      // Update position
      current_position += user_prompt_size;
