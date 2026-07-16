@@ -79,22 +79,25 @@ jobs:
 
       - name: Collect APK and build metadata
         shell: bash
+        env:
+          NIGHTMASTER_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           mkdir -p dist
           apk_source="build/llama.cpp/examples/llama.android/app/build/outputs/apk/debug/app-debug.apk"
           apk_target="dist/NightMaster-prototype-debug.apk"
           cp "$apk_source" "$apk_target"
-          sha256sum "$apk_target" > dist/SHA256.txt
+          (cd dist && sha256sum NightMaster-prototype-debug.apk > SHA256.txt)
 
-          app_commit="$(git rev-parse HEAD)"
+          checkout_commit="$(git rev-parse HEAD)"
           llama_commit="$(git -C build/llama.cpp rev-parse HEAD)"
           apk_sha256="$(sha256sum "$apk_target" | cut -d' ' -f1)"
 
           cat > dist/BUILD_INFO.txt <<EOF
           NightMaster version: 0.5-prototype
           Package: ru.aspid.nightmaster
-          Application commit: $app_commit
+          Application source commit: $NIGHTMASTER_SOURCE_COMMIT
+          Workflow checkout commit: $checkout_commit
           llama.cpp commit: $llama_commit
           Inference ABI: arm64-v8a
           Build type: debug
