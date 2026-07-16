@@ -1,0 +1,2 @@
+-keep class com.arm.aichat.** { *; }
+-keep class ru.aspid.nightmaster.** { *; }
