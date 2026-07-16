@@ -11,8 +11,8 @@ android {
         applicationId = "ru.aspid.nightmaster"
         minSdk = 33
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3-prototype"
+        versionCode = 4
+        versionName = "0.4-prototype"
 
         vectorDrawables {
             useSupportLibrary = true
