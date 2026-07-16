@@ -12,6 +12,8 @@ permissions:
 
 env:
   LLAMA_CPP_COMMIT: 8ee54c8b32a1b0cf13c03fc5723142bc62c775f6
+  NIGHTMASTER_VERSION_NAME: 0.6-foundation
+  NIGHTMASTER_VERSION_CODE: 6
 
 jobs:
   build:
@@ -77,7 +79,7 @@ jobs:
           path: gradle-build.log
           if-no-files-found: error
 
-      - name: Collect APK and build metadata
+      - name: Collect APK, Room schema and build metadata
         shell: bash
         env:
           NIGHTMASTER_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -85,16 +87,25 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           apk_source="build/llama.cpp/examples/llama.android/app/build/outputs/apk/debug/app-debug.apk"
-          apk_target="dist/NightMaster-prototype-debug.apk"
+          apk_target="dist/NightMaster-foundation-debug.apk"
+          schema_source="build/llama.cpp/examples/llama.android/app/schemas"
+
           cp "$apk_source" "$apk_target"
-          (cd dist && sha256sum NightMaster-prototype-debug.apk > SHA256.txt)
+          (cd dist && sha256sum NightMaster-foundation-debug.apk > SHA256.txt)
+
+          if [[ ! -d "$schema_source" ]]; then
+            echo "Room schema directory was not generated" >&2
+            exit 1
+          fi
+          cp -R "$schema_source" dist/room-schemas
 
           checkout_commit="$(git rev-parse HEAD)"
           llama_commit="$(git -C build/llama.cpp rev-parse HEAD)"
           apk_sha256="$(sha256sum "$apk_target" | cut -d' ' -f1)"
 
           cat > dist/BUILD_INFO.txt <<EOF
-          NightMaster version: 0.5-prototype
+          NightMaster version: $NIGHTMASTER_VERSION_NAME
+          Version code: $NIGHTMASTER_VERSION_CODE
           Package: ru.aspid.nightmaster
           Application source commit: $NIGHTMASTER_SOURCE_COMMIT
           Workflow checkout commit: $checkout_commit
@@ -110,11 +121,14 @@ jobs:
           set -euo pipefail
           exec > >(tee "$GITHUB_WORKSPACE/apk-validation.log") 2>&1
 
-          apk="dist/NightMaster-prototype-debug.apk"
+          apk="dist/NightMaster-foundation-debug.apk"
+          committed_schema="overlay/app/schemas/ru.aspid.nightmaster.data.database.NightMasterDatabase/1.json"
+          generated_schema="dist/room-schemas/ru.aspid.nightmaster.data.database.NightMasterDatabase/1.json"
           package_name="$(apkanalyzer manifest application-id "$apk")"
           version_name="$(apkanalyzer manifest version-name "$apk")"
           version_code="$(apkanalyzer manifest version-code "$apk")"
           permissions="$(apkanalyzer manifest permissions "$apk")"
+          manifest="$(apkanalyzer manifest print "$apk")"
           files="$(unzip -Z1 "$apk")"
           actual_llama_commit="$(git -C build/llama.cpp rev-parse HEAD)"
 
@@ -130,12 +144,25 @@ jobs:
             echo "Unexpected package name" >&2
             exit 1
           }
-          [[ "$version_name" == "0.5-prototype" ]] || {
+          [[ "$version_name" == "$NIGHTMASTER_VERSION_NAME" ]] || {
             echo "Unexpected version name" >&2
             exit 1
           }
-          [[ "$version_code" == "5" ]] || {
+          [[ "$version_code" == "$NIGHTMASTER_VERSION_CODE" ]] || {
             echo "Unexpected version code" >&2
+            exit 1
+          }
+
+          grep -Fq 'ru.aspid.nightmaster.ShellActivity' <<<"$manifest" || {
+            echo "Compose shell activity is missing from manifest" >&2
+            exit 1
+          }
+          grep -Fq 'ru.aspid.nightmaster.MainActivity' <<<"$manifest" || {
+            echo "Legacy chat activity is missing from manifest" >&2
+            exit 1
+          }
+          grep -Fq 'android.intent.action.MAIN' <<<"$manifest" || {
+            echo "Launcher MAIN intent is missing" >&2
             exit 1
           }
 
@@ -168,6 +195,20 @@ jobs:
             exit 1
           }
 
+          test -f "$generated_schema" || {
+            echo "Room schema v1 is missing from artifact" >&2
+            exit 1
+          }
+          test -f "$committed_schema" || {
+            echo "Committed Room schema v1 is missing" >&2
+            exit 1
+          }
+          cmp --silent "$committed_schema" "$generated_schema" || {
+            echo "Committed Room schema differs from generated schema" >&2
+            diff -u "$committed_schema" "$generated_schema" || true
+            exit 1
+          }
+
       - name: Upload APK validation log
         if: always()
         uses: actions/upload-artifact@v4
@@ -179,6 +220,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NightMaster-prototype-apk
+          name: NightMaster-foundation-apk
           path: dist/
           if-no-files-found: error
