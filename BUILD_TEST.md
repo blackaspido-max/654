@@ -2,4 +2,4 @@
 
 This branch exists only to trigger and inspect the Android APK build.
 
-Trigger: 5
+Trigger: 6
