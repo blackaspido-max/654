@@ -58,6 +58,26 @@ jobs:
           path: ~/.android/debug.keystore
           key: nightmaster-development-signing-v1
 
+      - name: Ensure development signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          debug_keystore="$HOME/.android/debug.keystore"
+          mkdir -p "$(dirname "$debug_keystore")"
+          if [[ ! -f "$debug_keystore" ]]; then
+            keytool -genkeypair \
+              -keystore "$debug_keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=NightMaster Development,O=Aspid,C=LV" \
+              -noprompt
+          fi
+          test -f "$debug_keystore"
+
       - name: Accept licenses and install native tools
         run: |
           yes | sdkmanager --licenses >/dev/null || true
