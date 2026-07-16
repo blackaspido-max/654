@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.BottomNavigation
 import androidx.compose.material.BottomNavigationItem
 import androidx.compose.material.Button
@@ -270,9 +271,9 @@ private fun PlaceholderListScreen(
         if (rows.isEmpty()) {
             item { Text(emptyText) }
         } else {
-            items(rows.size) { index ->
+            items(rows) { row ->
                 Card(modifier = Modifier.fillMaxWidth()) {
-                    Text(rows[index], modifier = Modifier.padding(16.dp))
+                    Text(row, modifier = Modifier.padding(16.dp))
                 }
             }
         }
