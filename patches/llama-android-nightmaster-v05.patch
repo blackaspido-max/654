@@ -1,0 +1,90 @@
+diff --git a/examples/llama.android/lib/build.gradle.kts b/examples/llama.android/lib/build.gradle.kts
+--- a/examples/llama.android/lib/build.gradle.kts
++++ b/examples/llama.android/lib/build.gradle.kts
+@@ -18,7 +18,7 @@ android {
+         consumerProguardFiles("consumer-rules.pro")
+ 
+         ndk {
+-             abiFilters += listOf("arm64-v8a", "x86_64")
++             abiFilters += listOf("arm64-v8a")
+         }
+         externalNativeBuild {
+             cmake {
+@@ -32,8 +32,8 @@ android {
+                 arguments += "-DLLAMA_OPENSSL=OFF"
+ 
+                 arguments += "-DGGML_NATIVE=OFF"
+-                arguments += "-DGGML_BACKEND_DL=ON"
+-                arguments += "-DGGML_CPU_ALL_VARIANTS=ON"
++                arguments += "-DGGML_BACKEND_DL=OFF"
++                arguments += "-DGGML_CPU_ALL_VARIANTS=OFF"
+                 arguments += "-DGGML_LLAMAFILE=OFF"
+             }
+         }
+diff --git a/examples/llama.android/lib/src/main/cpp/CMakeLists.txt b/examples/llama.android/lib/src/main/cpp/CMakeLists.txt
+--- a/examples/llama.android/lib/src/main/cpp/CMakeLists.txt
++++ b/examples/llama.android/lib/src/main/cpp/CMakeLists.txt
+@@ -21,7 +21,7 @@ if(DEFINED ANDROID_ABI)
+     message(STATUS "Detected Android ABI: ${ANDROID_ABI}")
+     if(ANDROID_ABI STREQUAL "arm64-v8a")
+         set(GGML_SYSTEM_ARCH "ARM")
+-        set(GGML_CPU_KLEIDIAI ON)
++        set(GGML_CPU_KLEIDIAI OFF)
+         set(GGML_OPENMP ON)
+     elseif(ANDROID_ABI STREQUAL "x86_64")
+         set(GGML_SYSTEM_ARCH "x86")
+diff --git a/examples/llama.android/lib/src/main/cpp/ai_chat.cpp b/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
+--- a/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
++++ b/examples/llama.android/lib/src/main/cpp/ai_chat.cpp
+@@ -30,11 +30,11 @@ constexpr int   N_THREADS_MIN           = 2;
+ constexpr int   N_THREADS_MAX           = 4;
+ constexpr int   N_THREADS_HEADROOM      = 2;
+ 
+-constexpr int   DEFAULT_CONTEXT_SIZE    = 8192;
++constexpr int   DEFAULT_CONTEXT_SIZE    = 4096;
+ constexpr int   OVERFLOW_HEADROOM       = 4;
+ constexpr int   BATCH_SIZE              = 512;
+-constexpr float DEFAULT_SAMPLER_TEMP    = 0.3f;
++constexpr float DEFAULT_SAMPLER_TEMP    = 0.70f;
+ 
+ static llama_model                      * g_model;
+ static llama_context                    * g_context;
+@@ -108,6 +108,12 @@ static llama_context *init_context(llama_model *model, const int n_ctx = DEFAULT
+ static common_sampler *new_sampler(float temp) {
+     common_params_sampling sparams;
+     sparams.temp = temp;
++    sparams.top_k = 20;
++    sparams.top_p = 0.80f;
++    sparams.min_p = 0.00f;
++    sparams.penalty_last_n = 128;
++    sparams.penalty_repeat = 1.08f;
++    sparams.penalty_present = 0.15f;
+     return common_sampler_init(g_model, sparams);
+ }
+ 
+@@ -369,7 +375,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processSystemPrompt(
+     std::string formatted_system_prompt(system_prompt);
+ 
+     // Format system prompt if applicable
+-    const bool has_chat_template = common_chat_templates_was_explicit(g_chat_templates.get());
++    const bool has_chat_template = true;
+     if (has_chat_template) {
+         formatted_system_prompt = chat_add_and_format(ROLE_SYSTEM, system_prompt);
+     }
+@@ -418,7 +424,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
+     std::string formatted_user_prompt(user_prompt);
+ 
+     // Format user prompt if applicable
+-    const bool has_chat_template = common_chat_templates_was_explicit(g_chat_templates.get());
++    const bool has_chat_template = true;
+     if (has_chat_template) {
+         formatted_user_prompt = chat_add_and_format(ROLE_USER, user_prompt);
+     }
+@@ -447,6 +453,6 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
+ 
+     // Update position
+     current_position += user_prompt_size;
+-    stop_generation_position = current_position + user_prompt_size + n_predict;
++    stop_generation_position = current_position + n_predict;
+     return 0;
+ }
