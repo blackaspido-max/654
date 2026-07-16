@@ -16,7 +16,7 @@
 
 - версия: `0.5-prototype`;
 - package: `ru.aspid.nightmaster`;
-- ABI: `arm64-v8a`;
+- ABI inference-движка: `arm64-v8a`;
 - `llama.cpp`: `8ee54c8b32a1b0cf13c03fc5723142bc62c775f6`;
 - резервная ветка: `archive/prototype-v0.5`.
 
@@ -35,11 +35,17 @@
 5. Подменяет демонстрационный app-модуль содержимым `overlay/app`.
 
 GitHub Actions затем собирает APK, проверяет package, версию, отсутствие
-`INTERNET`, наличие только ARM64-библиотек и публикует вместе с APK:
+`INTERNET`, наличие ARM64-библиотек inference-движка и отсутствие его сборок
+для других ABI. Служебные нативные библиотеки AndroidX проверяются отдельно от
+`llama.cpp`.
+
+В artifact публикуются:
 
 - `SHA256.txt`;
 - `BUILD_INFO.txt`;
-- полный Gradle log.
+- лог подготовки upstream и patch;
+- полный Gradle log;
+- лог статической проверки APK.
 
 ## Сторонний код
 
