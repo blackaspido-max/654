@@ -1,4 +1,4 @@
-name: Build Night Master APK
+name: Build Night Master FD Test APK
 
 on:
   workflow_dispatch:
@@ -12,8 +12,9 @@ permissions:
 
 env:
   LLAMA_CPP_COMMIT: 8ee54c8b32a1b0cf13c03fc5723142bc62c775f6
-  NIGHTMASTER_VERSION_NAME: 0.7.1-model-manager-fd-fix
-  NIGHTMASTER_VERSION_CODE: 8
+  NIGHTMASTER_VERSION_NAME: 0.7.2-fd-test
+  NIGHTMASTER_VERSION_CODE: 1
+  NIGHTMASTER_PACKAGE: ru.aspid.nightmaster.fdtest
 
 jobs:
   build:
@@ -38,7 +39,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: NightMaster-prepare-log
+          name: NightMaster-FD-Test-prepare-log
           path: prepare-project.log
           if-no-files-found: error
 
@@ -102,7 +103,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: NightMaster-gradle-log
+          name: NightMaster-FD-Test-gradle-log
           path: gradle-build.log
           if-no-files-found: error
 
@@ -115,12 +116,12 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           apk_source="build/llama.cpp/examples/llama.android/app/build/outputs/apk/debug/app-debug.apk"
-          apk_target="dist/NightMaster-0.7.1-model-manager-fd-fix.apk"
+          apk_target="dist/NightMaster-0.7.2-FD-TEST.apk"
           schema_source="build/llama.cpp/examples/llama.android/app/schemas"
           debug_keystore="$HOME/.android/debug.keystore"
 
           cp "$apk_source" "$apk_target"
-          (cd dist && sha256sum NightMaster-0.7.1-model-manager-fd-fix.apk > SHA256.txt)
+          (cd dist && sha256sum NightMaster-0.7.2-FD-TEST.apk > SHA256.txt)
 
           if [[ ! -d "$schema_source" ]]; then
             echo "Room schema directory was not generated" >&2
@@ -141,12 +142,12 @@ jobs:
           cat > dist/BUILD_INFO.txt <<EOF
           NightMaster version: $NIGHTMASTER_VERSION_NAME
           Version code: $NIGHTMASTER_VERSION_CODE
-          Package: ru.aspid.nightmaster
+          Package: $NIGHTMASTER_PACKAGE
           Application source commit: $NIGHTMASTER_SOURCE_COMMIT
           Workflow checkout commit: $checkout_commit
           llama.cpp commit: $llama_commit
           Inference ABI: arm64-v8a
-          Build type: debug
+          Build type: debug parallel test package
           Development signing cache restored: $DEBUG_KEYSTORE_CACHE_HIT
           Development signing key SHA-256: $signing_key_sha256
           APK SHA-256: $apk_sha256
@@ -158,7 +159,7 @@ jobs:
           set -euo pipefail
           exec > >(tee "$GITHUB_WORKSPACE/apk-validation.log") 2>&1
 
-          apk="dist/NightMaster-0.7.1-model-manager-fd-fix.apk"
+          apk="dist/NightMaster-0.7.2-FD-TEST.apk"
           committed_schema="overlay/app/schemas/ru.aspid.nightmaster.data.database.NightMasterDatabase/1.json"
           generated_schema="dist/room-schemas/ru.aspid.nightmaster.data.database.NightMasterDatabase/1.json"
           package_name="$(apkanalyzer manifest application-id "$apk")"
@@ -177,7 +178,7 @@ jobs:
           grep -E '^lib/' <<<"$files" || true
           printf 'Permissions:\n%s\n' "$permissions"
 
-          [[ "$package_name" == "ru.aspid.nightmaster" ]] || {
+          [[ "$package_name" == "$NIGHTMASTER_PACKAGE" ]] || {
             echo "Unexpected package name" >&2
             exit 1
           }
@@ -252,13 +253,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: NightMaster-apk-validation-log
+          name: NightMaster-FD-Test-apk-validation-log
           path: apk-validation.log
           if-no-files-found: warn
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NightMaster-model-manager-fd-fix-apk
+          name: NightMaster-FD-Test-apk
           path: dist/
           if-no-files-found: error
