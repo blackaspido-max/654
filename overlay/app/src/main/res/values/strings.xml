@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Ночной мастер</string>
+    <string name="app_name">Ночной мастер FD TEST</string>
     <string name="status_starting">Запускаю локальный движок…</string>
     <string name="status_choose_model">Модель не выбрана</string>
     <string name="status_copying_model">Копирую модель в приложение…</string>
@@ -16,5 +16,5 @@
     <string name="benchmark">Тест скорости</string>
     <string name="benchmark_title">Производительность модели</string>
     <string name="input_hint">Опиши сцену или действие…</string>
-    <string name="initial_message">Я — Ночной мастер. Выбери файл локальной модели, затем опиши сеттинг, персонажа и начальную сцену.</string>
+    <string name="initial_message">Я — Ночной мастер FD TEST. Выбери файл локальной модели, затем опиши сеттинг, персонажа и начальную сцену.</string>
 </resources>

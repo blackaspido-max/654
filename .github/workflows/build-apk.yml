@@ -1,4 +1,4 @@
-name: Build Night Master APK
+name: Build Night Master FD Test APK
 
 on:
   workflow_dispatch:
@@ -12,8 +12,9 @@ permissions:
 
 env:
   LLAMA_CPP_COMMIT: 8ee54c8b32a1b0cf13c03fc5723142bc62c775f6
-  NIGHTMASTER_VERSION_NAME: 0.6-foundation
-  NIGHTMASTER_VERSION_CODE: 6
+  NIGHTMASTER_VERSION_NAME: 0.7.2-fd-test
+  NIGHTMASTER_VERSION_CODE: 1
+  NIGHTMASTER_PACKAGE: ru.aspid.nightmaster.fdtest
 
 jobs:
   build:
@@ -38,7 +39,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: NightMaster-prepare-log
+          name: NightMaster-FD-Test-prepare-log
           path: prepare-project.log
           if-no-files-found: error
 
@@ -51,6 +52,33 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Restore stable development signing key
+        id: debug_keystore_cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: nightmaster-development-signing-v1
+
+      - name: Ensure development signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          debug_keystore="$HOME/.android/debug.keystore"
+          mkdir -p "$(dirname "$debug_keystore")"
+          if [[ ! -f "$debug_keystore" ]]; then
+            keytool -genkeypair \
+              -keystore "$debug_keystore" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=NightMaster Development,O=Aspid,C=LV" \
+              -noprompt
+          fi
+          test -f "$debug_keystore"
+
       - name: Accept licenses and install native tools
         run: |
           yes | sdkmanager --licenses >/dev/null || true
@@ -60,13 +88,13 @@ jobs:
             "ndk;29.0.13113456" \
             "cmake;3.31.6"
 
-      - name: Build debug APK
+      - name: Test and build debug APK
         id: gradle_build
         working-directory: build/llama.cpp/examples/llama.android
         shell: bash
         run: |
           set +e
-          ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee "$GITHUB_WORKSPACE/gradle-build.log"
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace 2>&1 | tee "$GITHUB_WORKSPACE/gradle-build.log"
           code=${PIPESTATUS[0]}
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           exit "$code"
@@ -75,7 +103,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: NightMaster-gradle-log
+          name: NightMaster-FD-Test-gradle-log
           path: gradle-build.log
           if-no-files-found: error
 
@@ -83,15 +111,17 @@ jobs:
         shell: bash
         env:
           NIGHTMASTER_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          DEBUG_KEYSTORE_CACHE_HIT: ${{ steps.debug_keystore_cache.outputs.cache-hit }}
         run: |
           set -euo pipefail
           mkdir -p dist
           apk_source="build/llama.cpp/examples/llama.android/app/build/outputs/apk/debug/app-debug.apk"
-          apk_target="dist/NightMaster-foundation-debug.apk"
+          apk_target="dist/NightMaster-0.7.2-FD-TEST.apk"
           schema_source="build/llama.cpp/examples/llama.android/app/schemas"
+          debug_keystore="$HOME/.android/debug.keystore"
 
           cp "$apk_source" "$apk_target"
-          (cd dist && sha256sum NightMaster-foundation-debug.apk > SHA256.txt)
+          (cd dist && sha256sum NightMaster-0.7.2-FD-TEST.apk > SHA256.txt)
 
           if [[ ! -d "$schema_source" ]]; then
             echo "Room schema directory was not generated" >&2
@@ -99,19 +129,27 @@ jobs:
           fi
           cp -R "$schema_source" dist/room-schemas
 
+          if [[ ! -f "$debug_keystore" ]]; then
+            echo "Development signing key was not created" >&2
+            exit 1
+          fi
+
           checkout_commit="$(git rev-parse HEAD)"
           llama_commit="$(git -C build/llama.cpp rev-parse HEAD)"
           apk_sha256="$(sha256sum "$apk_target" | cut -d' ' -f1)"
+          signing_key_sha256="$(sha256sum "$debug_keystore" | cut -d' ' -f1)"
 
           cat > dist/BUILD_INFO.txt <<EOF
           NightMaster version: $NIGHTMASTER_VERSION_NAME
           Version code: $NIGHTMASTER_VERSION_CODE
-          Package: ru.aspid.nightmaster
+          Package: $NIGHTMASTER_PACKAGE
           Application source commit: $NIGHTMASTER_SOURCE_COMMIT
           Workflow checkout commit: $checkout_commit
           llama.cpp commit: $llama_commit
           Inference ABI: arm64-v8a
-          Build type: debug
+          Build type: debug parallel test package
+          Development signing cache restored: $DEBUG_KEYSTORE_CACHE_HIT
+          Development signing key SHA-256: $signing_key_sha256
           APK SHA-256: $apk_sha256
           EOF
 
@@ -121,7 +159,7 @@ jobs:
           set -euo pipefail
           exec > >(tee "$GITHUB_WORKSPACE/apk-validation.log") 2>&1
 
-          apk="dist/NightMaster-foundation-debug.apk"
+          apk="dist/NightMaster-0.7.2-FD-TEST.apk"
           committed_schema="overlay/app/schemas/ru.aspid.nightmaster.data.database.NightMasterDatabase/1.json"
           generated_schema="dist/room-schemas/ru.aspid.nightmaster.data.database.NightMasterDatabase/1.json"
           package_name="$(apkanalyzer manifest application-id "$apk")"
@@ -140,7 +178,7 @@ jobs:
           grep -E '^lib/' <<<"$files" || true
           printf 'Permissions:\n%s\n' "$permissions"
 
-          [[ "$package_name" == "ru.aspid.nightmaster" ]] || {
+          [[ "$package_name" == "$NIGHTMASTER_PACKAGE" ]] || {
             echo "Unexpected package name" >&2
             exit 1
           }
@@ -153,14 +191,16 @@ jobs:
             exit 1
           }
 
-          grep -Fq 'ru.aspid.nightmaster.ShellActivity' <<<"$manifest" || {
-            echo "Compose shell activity is missing from manifest" >&2
-            exit 1
-          }
-          grep -Fq 'ru.aspid.nightmaster.MainActivity' <<<"$manifest" || {
-            echo "Legacy chat activity is missing from manifest" >&2
-            exit 1
-          }
+          for activity in \
+            ru.aspid.nightmaster.ShellActivity \
+            ru.aspid.nightmaster.ModelChatActivity \
+            ru.aspid.nightmaster.MainActivity; do
+            grep -Fq "$activity" <<<"$manifest" || {
+              echo "Required activity is missing: $activity" >&2
+              exit 1
+            }
+          done
+
           grep -Fq 'android.intent.action.MAIN' <<<"$manifest" || {
             echo "Launcher MAIN intent is missing" >&2
             exit 1
@@ -213,13 +253,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: NightMaster-apk-validation-log
+          name: NightMaster-FD-Test-apk-validation-log
           path: apk-validation.log
           if-no-files-found: warn
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NightMaster-foundation-apk
+          name: NightMaster-FD-Test-apk
           path: dist/
           if-no-files-found: error

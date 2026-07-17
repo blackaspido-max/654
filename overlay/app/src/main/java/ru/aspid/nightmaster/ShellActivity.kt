@@ -21,6 +21,7 @@ import androidx.compose.material.Button
 import androidx.compose.material.Card
 import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedButton
 import androidx.compose.material.Scaffold
 import androidx.compose.material.Switch
 import androidx.compose.material.Text
@@ -36,19 +37,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import ru.aspid.nightmaster.data.database.NightMasterDao
+import ru.aspid.nightmaster.data.models.ModelCatalogRepository
 import ru.aspid.nightmaster.data.preferences.SettingsRepository
+import ru.aspid.nightmaster.feature.models.ModelManagerScreen
 
 class ShellActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val app = application as NightMasterApplication
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            app.modelCatalogRepository.migrateLegacyModels()
+        }
 
         setContent {
             val darkTheme by app.settingsRepository.darkThemeEnabled
@@ -57,7 +66,11 @@ class ShellActivity : ComponentActivity() {
             MaterialTheme(colors = if (darkTheme) darkColors() else lightColors()) {
                 NightMasterShell(
                     dao = app.database.dao(),
+                    modelCatalogRepository = app.modelCatalogRepository,
                     settingsRepository = app.settingsRepository,
+                    onOpenChat = {
+                        startActivity(Intent(this, ModelChatActivity::class.java))
+                    },
                     onOpenLegacyChat = {
                         startActivity(Intent(this, MainActivity::class.java))
                     },
@@ -81,7 +94,9 @@ private enum class ShellDestination(
 @Composable
 private fun NightMasterShell(
     dao: NightMasterDao,
+    modelCatalogRepository: ModelCatalogRepository,
     settingsRepository: SettingsRepository,
+    onOpenChat: () -> Unit,
     onOpenLegacyChat: () -> Unit,
 ) {
     val navController = rememberNavController()
@@ -96,10 +111,7 @@ private fun NightMasterShell(
                 title = {
                     Column {
                         Text("Ночной мастер")
-                        Text(
-                            text = currentDestination.title,
-                            style = MaterialTheme.typography.caption,
-                        )
+                        Text(currentDestination.title, style = MaterialTheme.typography.caption)
                     }
                 },
             )
@@ -131,13 +143,22 @@ private fun NightMasterShell(
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(ShellDestination.Home.route) {
-                HomeScreen(dao = dao, onOpenLegacyChat = onOpenLegacyChat)
+                HomeScreen(
+                    dao = dao,
+                    modelCatalogRepository = modelCatalogRepository,
+                    onOpenChat = onOpenChat,
+                    onOpenLegacyChat = onOpenLegacyChat,
+                    onOpenModels = { navController.navigate(ShellDestination.Models.route) },
+                )
             }
             composable(ShellDestination.Chats.route) {
                 ChatsScreen(dao = dao)
             }
             composable(ShellDestination.Models.route) {
-                ModelsScreen(dao = dao)
+                ModelManagerScreen(
+                    repository = modelCatalogRepository,
+                    onOpenChat = onOpenChat,
+                )
             }
             composable(ShellDestination.Settings.route) {
                 SettingsScreen(settingsRepository = settingsRepository)
@@ -149,11 +170,16 @@ private fun NightMasterShell(
 @Composable
 private fun HomeScreen(
     dao: NightMasterDao,
+    modelCatalogRepository: ModelCatalogRepository,
+    onOpenChat: () -> Unit,
     onOpenLegacyChat: () -> Unit,
+    onOpenModels: () -> Unit,
 ) {
     val chatCount by dao.observeChatCount().collectAsStateWithLifecycle(initialValue = 0)
     val modelCount by dao.observeModelCount().collectAsStateWithLifecycle(initialValue = 0)
     val benchmarkCount by dao.observeBenchmarkCount().collectAsStateWithLifecycle(initialValue = 0)
+    val selectedModel by modelCatalogRepository.selectedModel
+        .collectAsStateWithLifecycle(initialValue = null)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -162,17 +188,27 @@ private fun HomeScreen(
     ) {
         item {
             Text(
-                text = "Фундамент нового приложения",
+                text = "Локальный мастер готов",
                 style = MaterialTheme.typography.h5,
                 fontWeight = FontWeight.Bold,
             )
         }
         item {
-            Text(
-                text = "Compose-оболочка уже отделена от проверенного inference-экрана. " +
-                    "Пока новый чат не закончен, рабочая версия v0.5 остаётся доступна без изменений.",
-                style = MaterialTheme.typography.body1,
-            )
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text("Активная модель", fontWeight = FontWeight.Bold)
+                    Text(selectedModel?.displayName ?: "Модель ещё не выбрана")
+                    selectedModel?.let { model ->
+                        val details = listOfNotNull(model.family, model.quantization)
+                        if (details.isNotEmpty()) {
+                            Text(details.joinToString(" · "), style = MaterialTheme.typography.caption)
+                        }
+                    }
+                }
+            }
         }
         item {
             Row(
@@ -186,14 +222,33 @@ private fun HomeScreen(
         }
         item {
             Button(
-                onClick = onOpenLegacyChat,
+                onClick = if (selectedModel == null) onOpenModels else onOpenChat,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Открыть рабочий чат v0.5")
+                Text(if (selectedModel == null) "Добавить модель" else "Открыть чат 0.7")
             }
         }
         item {
-            FoundationCard()
+            OutlinedButton(
+                onClick = onOpenLegacyChat,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Резервный чат v0.5")
+            }
+        }
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                ) {
+                    Text("Model Manager 0.7", fontWeight = FontWeight.Bold)
+                    Text("• GGUF подключается без обязательного копирования")
+                    Text("• выбранная модель хранится в локальном каталоге")
+                    Text("• старые внутренние модели подхватываются автоматически")
+                    Text("• рабочий чат загружает модель только при открытии")
+                }
+            }
         }
     }
 }
@@ -212,68 +267,23 @@ private fun StatCard(title: String, value: Int, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun FoundationCard() {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("Уже подключено", fontWeight = FontWeight.Bold)
-            Text("• Compose и навигационная оболочка")
-            Text("• Room: чаты, сообщения, модели и benchmark")
-            Text("• DataStore для пользовательских настроек")
-            Text("• InferenceController над рабочим llama.cpp-движком")
-            Text("• Legacy-чат сохранён как страховочная рабочая точка")
-        }
-    }
-}
-
-@Composable
 private fun ChatsScreen(dao: NightMasterDao) {
     val chats by dao.observeChats().collectAsStateWithLifecycle(initialValue = emptyList())
-    PlaceholderListScreen(
-        title = "Сохранённые чаты",
-        emptyText = "Чатов пока нет. На следующем этапе новый чат начнёт сохранять историю сюда.",
-        rows = chats.map { it.title },
-    )
-}
-
-@Composable
-private fun ModelsScreen(dao: NightMasterDao) {
-    val models by dao.observeModels().collectAsStateWithLifecycle(initialValue = emptyList())
-    PlaceholderListScreen(
-        title = "Локальные модели",
-        emptyText = "Каталог моделей пока пуст. Следующий этап добавит импорт без обязательного копирования GGUF.",
-        rows = models.map { model ->
-            buildString {
-                append(model.displayName)
-                model.quantization?.let { append(" · ").append(it) }
-            }
-        },
-    )
-}
-
-@Composable
-private fun PlaceholderListScreen(
-    title: String,
-    emptyText: String,
-    rows: List<String>,
-) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
-            Text(title, style = MaterialTheme.typography.h5, fontWeight = FontWeight.Bold)
+            Text("Сохранённые чаты", style = MaterialTheme.typography.h5, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
         }
-        if (rows.isEmpty()) {
-            item { Text(emptyText) }
+        if (chats.isEmpty()) {
+            item { Text("Чатов пока нет. История появится после внедрения нового экрана чата.") }
         } else {
-            items(rows) { row ->
+            items(chats, key = { it.id }) { chat ->
                 Card(modifier = Modifier.fillMaxWidth()) {
-                    Text(row, modifier = Modifier.padding(16.dp))
+                    Text(chat.title, modifier = Modifier.padding(16.dp))
                 }
             }
         }
@@ -291,8 +301,8 @@ private fun SettingsScreen(settingsRepository: SettingsRepository) {
     val settings = remember(autoLoad, darkTheme) {
         listOf(
             SettingRowState(
-                title = "Автозагрузка выбранной модели",
-                description = "Пока выключено по умолчанию, чтобы запуск приложения не занимал память без запроса.",
+                title = "Автозагрузка при открытии чата",
+                description = "Модель не занимает память на главном экране и загружается только при входе в чат.",
                 checked = autoLoad,
                 onCheckedChange = { enabled ->
                     scope.launch { settingsRepository.setAutoLoadSelectedModel(enabled) }
@@ -300,7 +310,7 @@ private fun SettingsScreen(settingsRepository: SettingsRepository) {
             ),
             SettingRowState(
                 title = "Тёмная тема",
-                description = "Переключение уже сохраняется через DataStore.",
+                description = "Переключение сохраняется локально через DataStore.",
                 checked = darkTheme,
                 onCheckedChange = { enabled ->
                     scope.launch { settingsRepository.setDarkThemeEnabled(enabled) }
