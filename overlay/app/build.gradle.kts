@@ -10,11 +10,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "ru.aspid.nightmaster"
+        applicationId = "ru.aspid.nightmaster.fdtest"
         minSdk = 33
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.7.1-model-manager-fd-fix"
+        versionCode = 1
+        versionName = "0.7.2-fd-test"
 
         vectorDrawables {
             useSupportLibrary = true
