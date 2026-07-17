@@ -13,8 +13,8 @@ android {
         applicationId = "ru.aspid.nightmaster"
         minSdk = 33
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.7-model-manager"
+        versionCode = 8
+        versionName = "0.7.1-model-manager-fd-fix"
 
         vectorDrawables {
             useSupportLibrary = true
