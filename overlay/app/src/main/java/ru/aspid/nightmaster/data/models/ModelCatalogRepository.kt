@@ -30,6 +30,7 @@ class ModelCatalogRepository(
     private val appContext = context.applicationContext
     private val resolver: ContentResolver = appContext.contentResolver
     private val legacyPreferences = appContext.getSharedPreferences("night_master", Context.MODE_PRIVATE)
+    private val modelDirectory = File(appContext.filesDir, "models")
 
     val models: Flow<List<ModelEntity>> = dao.observeModels()
     val selectedModel: Flow<ModelEntity?> = dao.observeSelectedModel()
@@ -47,19 +48,21 @@ class ModelCatalogRepository(
         verifySeekable(uri)
         persistReadPermission(uri)
 
+        val id = stableId("uri:${uri}")
+        val existing = dao.getModel(id)
         val model = ModelEntity(
-            id = stableId("uri:${uri}"),
+            id = id,
             displayName = metadata.displayName,
             documentUri = uri.toString(),
-            localPath = null,
-            sizeBytes = metadata.sizeBytes,
+            localPath = existing?.localPath,
+            sizeBytes = metadata.sizeBytes ?: existing?.sizeBytes,
             family = ModelFilenameMetadata.family(metadata.displayName),
             quantization = ModelFilenameMetadata.quantization(metadata.displayName),
-            isSelected = false,
-            createdAt = System.currentTimeMillis(),
+            isSelected = existing?.isSelected ?: false,
+            createdAt = existing?.createdAt ?: System.currentTimeMillis(),
         )
 
-        dao.upsertModelPreservingSelection(model)
+        dao.upsertModel(model)
         if (select || dao.getSelectedModel() == null) dao.selectModel(model.id)
         dao.getModel(model.id) ?: model
     }
@@ -75,6 +78,7 @@ class ModelCatalogRepository(
             dao.getNewestModel()?.let { fallback -> dao.selectModel(fallback.id) }
         }
 
+        model.localPath?.let(::deletePrivateFallbackIfOwned)
         model.documentUri?.let { value ->
             val uri = Uri.parse(value)
             runCatching {
@@ -91,7 +95,6 @@ class ModelCatalogRepository(
     }
 
     suspend fun migrateLegacyModels(): Int = withContext(Dispatchers.IO) {
-        val modelDirectory = File(appContext.filesDir, "models")
         val preferredPath = legacyPreferences.getString("model_path", null)
         val files = buildList {
             preferredPath?.let(::File)?.takeIf(File::isFile)?.let(::add)
@@ -154,6 +157,77 @@ class ModelCatalogRepository(
         } catch (error: Throwable) {
             descriptor.close()
             throw error
+        }
+    }
+
+    suspend fun createLocalFallback(
+        model: ModelEntity,
+        onProgress: suspend (copiedBytes: Long, totalBytes: Long?) -> Unit = { _, _ -> },
+    ): ModelEntity = withContext(Dispatchers.IO) {
+        model.localPath?.let { path ->
+            val existing = File(path)
+            if (existing.isFile) return@withContext model
+        }
+
+        val uri = model.documentUri?.let(Uri::parse)
+            ?: error("Для модели нет исходного файла, который можно скопировать")
+
+        modelDirectory.mkdirs()
+        require(modelDirectory.isDirectory) { "Не удалось создать каталог локальных моделей" }
+
+        val target = File(modelDirectory, "${model.id}.gguf")
+        val partial = File(modelDirectory, "${model.id}.gguf.part")
+        partial.delete()
+
+        try {
+            val totalBytes = model.sizeBytes
+            resolver.openInputStream(uri)?.use { input ->
+                partial.outputStream().buffered(COPY_BUFFER_SIZE).use { output ->
+                    val buffer = ByteArray(COPY_BUFFER_SIZE)
+                    var copiedBytes = 0L
+                    var lastReportedBytes = 0L
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        copiedBytes += read
+                        if (copiedBytes - lastReportedBytes >= PROGRESS_STEP_BYTES) {
+                            onProgress(copiedBytes, totalBytes)
+                            lastReportedBytes = copiedBytes
+                        }
+                    }
+                    output.flush()
+                    onProgress(copiedBytes, totalBytes)
+                }
+            } ?: error("Android не открыл исходный GGUF для копирования")
+
+            require(partial.length() > 0L) { "Скопированный GGUF оказался пустым" }
+            target.delete()
+            if (!partial.renameTo(target)) {
+                partial.copyTo(target, overwrite = true)
+                partial.delete()
+            }
+
+            val updated = model.copy(
+                localPath = target.absolutePath,
+                sizeBytes = target.length(),
+            )
+            dao.upsertModel(updated)
+            if (model.isSelected) dao.selectModel(model.id)
+            updated
+        } catch (error: Throwable) {
+            partial.delete()
+            throw error
+        }
+    }
+
+    private fun deletePrivateFallbackIfOwned(path: String) {
+        runCatching {
+            val candidate = File(path).canonicalFile
+            val ownedDirectory = modelDirectory.canonicalFile
+            if (candidate.parentFile == ownedDirectory && candidate.extension.equals("gguf", ignoreCase = true)) {
+                candidate.delete()
+            }
         }
     }
 
@@ -226,6 +300,11 @@ class ModelCatalogRepository(
         val displayName: String,
         val sizeBytes: Long?,
     )
+
+    private companion object {
+        const val COPY_BUFFER_SIZE = 8 * 1024 * 1024
+        const val PROGRESS_STEP_BYTES = 32L * 1024L * 1024L
+    }
 }
 
 class OpenModelHandle(
