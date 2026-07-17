@@ -91,7 +91,28 @@ diff --git a/examples/llama.android/lib/src/main/cpp/ai_chat.cpp b/examples/llam
 diff --git a/examples/llama.android/lib/src/main/java/com/arm/aichat/internal/InferenceEngineImpl.kt b/examples/llama.android/lib/src/main/java/com/arm/aichat/internal/InferenceEngineImpl.kt
 --- a/examples/llama.android/lib/src/main/java/com/arm/aichat/internal/InferenceEngineImpl.kt
 +++ b/examples/llama.android/lib/src/main/java/com/arm/aichat/internal/InferenceEngineImpl.kt
-@@ -322,5 +322,10 @@ internal class InferenceEngineImpl private constructor(
+@@ -156,12 +156,17 @@ internal class InferenceEngineImpl private constructor(
+             }
+ 
+             try {
+                 Log.i(TAG, "Checking access to model file... \n$pathToModel")
+-                File(pathToModel).let {
+-                    require(it.exists()) { "File not found" }
+-                    require(it.isFile) { "Not a valid file" }
+-                    require(it.canRead()) { "Cannot read file" }
++
++                val isOpenFileDescriptorPath =
++                    pathToModel.matches(Regex("^/proc/self/fd/\\d+$"))
++                if (!isOpenFileDescriptorPath) {
++                    File(pathToModel).let {
++                        require(it.exists()) { "File not found" }
++                        require(it.isFile) { "Not a valid file" }
++                        require(it.canRead()) { "Cannot read file" }
++                    }
+                 }
+ 
+                 Log.i(TAG, "Loading model... \n$pathToModel")
+@@ -322,5 +327,10 @@ internal class InferenceEngineImpl private constructor(
              }
          }
          llamaScope.cancel()
