@@ -114,27 +114,49 @@ class ModelChatActivity : AppCompatActivity() {
 
     private suspend fun loadModel(model: ModelEntity) {
         uiState(getString(R.string.status_loading_model), false)
-        val nextHandle = modelCatalog.openModel(model)
+
+        if (currentModelHandle != null) {
+            modelReady = false
+            runCatching { engine.cleanUp() }
+            currentModelHandle?.close()
+            currentModelHandle = null
+        }
+
+        val prompt = resources.openRawResource(R.raw.master_prompt)
+            .bufferedReader()
+            .use { it.readText() }
+
+        var resolvedModel = model
+        var nextHandle = modelCatalog.openModel(resolvedModel)
 
         try {
-            if (currentModelHandle != null) {
-                modelReady = false
-                engine.cleanUp()
-                currentModelHandle?.close()
-                currentModelHandle = null
+            try {
+                engine.loadModel(nextHandle.path)
+            } catch (directError: Throwable) {
+                val canCreateFallback = model.documentUri != null && model.localPath == null
+                if (!canCreateFallback) throw directError
+
+                nextHandle.close()
+                runCatching { engine.cleanUp() }
+                ui {
+                    status.text = "Прямой доступ не поддержан. Создаю локальную копию…"
+                }
+
+                resolvedModel = modelCatalog.createLocalFallback(model) { copiedBytes, totalBytes ->
+                    ui {
+                        status.text = localCopyStatus(copiedBytes, totalBytes)
+                    }
+                }
+                nextHandle = modelCatalog.openModel(resolvedModel)
+                engine.loadModel(nextHandle.path)
             }
 
-            engine.loadModel(nextHandle.path)
-            val prompt = resources.openRawResource(R.raw.master_prompt)
-                .bufferedReader()
-                .use { it.readText() }
             engine.setSystemPrompt(prompt)
-
-            currentModel = model
+            currentModel = resolvedModel
             currentModelHandle = nextHandle
             currentSystemPrompt = prompt
             modelReady = true
-            uiReady(model.displayName)
+            uiReady(resolvedModel.displayName)
         } catch (error: Throwable) {
             nextHandle.close()
             throw error
@@ -391,6 +413,17 @@ class ModelChatActivity : AppCompatActivity() {
     private fun readyStatus(modelName: String?): String =
         modelName?.let { "Готово · $it" } ?: getString(R.string.status_ready)
 
+    private fun localCopyStatus(copiedBytes: Long, totalBytes: Long?): String {
+        val copiedGiB = copiedBytes / GIBIBYTE
+        val totalGiB = totalBytes?.takeIf { it > 0L }?.div(GIBIBYTE)
+        return if (totalGiB != null) {
+            val percent = ((copiedBytes * 100L) / totalBytes).coerceIn(0L, 100L)
+            "Прямой доступ не поддержан. Копирую: $percent% · ${formatNumber(copiedGiB)} / ${formatNumber(totalGiB)} ГБ"
+        } else {
+            "Прямой доступ не поддержан. Копирую: ${formatNumber(copiedGiB)} ГБ"
+        }
+    }
+
     private suspend fun failLoad(prefix: String, error: Exception) {
         ui {
             modelReady = false
@@ -441,5 +474,6 @@ class ModelChatActivity : AppCompatActivity() {
     private companion object {
         const val BENCHMARK_PROMPT =
             "Напиши связный художественный абзац на русском языке. Не используй списки, заголовки и пояснения."
+        const val GIBIBYTE = 1024.0 * 1024.0 * 1024.0
     }
 }
