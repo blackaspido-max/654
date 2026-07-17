@@ -5,6 +5,7 @@ import androidx.room.Room
 import ru.aspid.nightmaster.core.inference.InferenceController
 import ru.aspid.nightmaster.core.inference.LlamaInferenceController
 import ru.aspid.nightmaster.data.database.NightMasterDatabase
+import ru.aspid.nightmaster.data.models.ModelCatalogRepository
 import ru.aspid.nightmaster.data.preferences.SettingsRepository
 
 class NightMasterApplication : Application() {
@@ -18,6 +19,14 @@ class NightMasterApplication : Application() {
 
     val settingsRepository: SettingsRepository by lazy {
         SettingsRepository(applicationContext)
+    }
+
+    val modelCatalogRepository: ModelCatalogRepository by lazy {
+        ModelCatalogRepository(
+            context = applicationContext,
+            dao = database.dao(),
+            settingsRepository = settingsRepository,
+        )
     }
 
     val inferenceController: InferenceController by lazy {

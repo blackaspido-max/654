@@ -13,8 +13,8 @@ android {
         applicationId = "ru.aspid.nightmaster"
         minSdk = 33
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.6-foundation"
+        versionCode = 8
+        versionName = "0.7.1-model-manager-fd-fix"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -71,5 +71,6 @@ dependencies {
     implementation("androidx.room:room-ktx:2.8.4")
     ksp("androidx.room:room-compiler:2.8.4")
 
+    testImplementation(libs.junit)
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

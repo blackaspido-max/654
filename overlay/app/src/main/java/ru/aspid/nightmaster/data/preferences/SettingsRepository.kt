@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
@@ -15,11 +14,7 @@ private val Context.nightMasterSettings by preferencesDataStore(name = "night_ma
 
 class SettingsRepository(private val context: Context) {
     val autoLoadSelectedModel: Flow<Boolean> = values { preferences ->
-        preferences[AUTO_LOAD_SELECTED_MODEL] ?: false
-    }
-
-    val selectedModelId: Flow<String?> = values { preferences ->
-        preferences[SELECTED_MODEL_ID]
+        preferences[AUTO_LOAD_SELECTED_MODEL] ?: true
     }
 
     val darkThemeEnabled: Flow<Boolean> = values { preferences ->
@@ -28,13 +23,6 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setAutoLoadSelectedModel(enabled: Boolean) {
         context.nightMasterSettings.edit { it[AUTO_LOAD_SELECTED_MODEL] = enabled }
-    }
-
-    suspend fun setSelectedModelId(modelId: String?) {
-        context.nightMasterSettings.edit { preferences ->
-            if (modelId == null) preferences.remove(SELECTED_MODEL_ID)
-            else preferences[SELECTED_MODEL_ID] = modelId
-        }
     }
 
     suspend fun setDarkThemeEnabled(enabled: Boolean) {
@@ -51,7 +39,6 @@ class SettingsRepository(private val context: Context) {
 
     private companion object {
         val AUTO_LOAD_SELECTED_MODEL = booleanPreferencesKey("auto_load_selected_model")
-        val SELECTED_MODEL_ID = stringPreferencesKey("selected_model_id")
         val DARK_THEME_ENABLED = booleanPreferencesKey("dark_theme_enabled")
     }
 }
